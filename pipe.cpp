@@ -9,35 +9,43 @@
 
 class MyPipe{
 
-    public:
-        int fd[2];
 
-       MyPipe(){}
+    public: 
+        FILE * tmp;
+        char * temp_file_name;
 
-       void popen(){
-           if (pipe(this->fd) < 0){
-              printf("Could not create pipe");
-              exit(EXIT_FAILURE);
-           }
-       }
+        MyPipe(){
+            this->temp_file_name = "temp.txt";
+        }
 
        size_t fwrite(char mass[], size_t size){
-            size_t writed_size = write(this->fd[1], mass, size);
-            return writed_size;
+            if(tmp == NULL){
+                tmp = fopen("temp.txt", "w+");
+            }
+
+            return fputs(mass, tmp);
        }
 
        size_t fread(char mass[], size_t size){
-           // read and close read descriptor
-          size_t read_size = read(this->fd[0], mass, size);
-          return read_size;
+           // read from read descriptor
+            if(tmp == NULL){
+                tmp = fopen("temp.txt", "r");
+            }
+
+           return fscanf(tmp, "%s", mass);
        }
 
        void frclose(){
-           close(fd[0]);
+            fclose(tmp);
        }
 
        void fwclose(){
-          close(fd[1]);
+           fclose(tmp);
+       }
+
+
+       void pclose(){
+            remove(temp_file_name);
        }
 
 };
@@ -119,8 +127,6 @@ int main()
     s2 = sizeof(mass);
     char re_mass[s2];
 
-
-
     safe_ask_user(&data_output_dest, "Choose output to [1 - file | 2 - console]: ");
     if (data_output_dest == 1){
         printf("Enter output file name: ");
@@ -130,7 +136,6 @@ int main()
 
 
     MyPipe pipeline = MyPipe();
-    pipeline.popen();
 
     if ((pid = fork()) > 0){
         if(direction == 1){
@@ -149,11 +154,6 @@ int main()
                 printf("%s\n", re_mass);
            }
 
-        }
-
-        if ( s1 != s2 ){
-            printf("Failed to perform action on pipeline\n");
-            exit(EXIT_FAILURE);
         }
 
         wait(NULL);
@@ -177,12 +177,10 @@ int main()
             s1 = pipeline.fwrite(mass, s2);
             pipeline.fwclose();
         }
-        if (s1 != s2){
-            printf("Failed to perform action on pipeline\n");
-            exit(EXIT_FAILURE);
-        }
 
      }
+
+    pipeline.pclose();
 
     return 0;
 }
