@@ -160,6 +160,8 @@ int main()
 
     }else{
         // child process
+        // @TODO: fix problem with reverse direction
+        // sigkill
         if(direction == 1){
             s1 = pipeline.fread(re_mass, s2);
             pipeline.frclose();
