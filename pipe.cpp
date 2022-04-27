@@ -5,39 +5,56 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <string.h>
+
+
+#define str_size 1024
 
 
 class MyPipe{
+ // my pipe implementation
 
-    public:
-        int fd[2];
+    public: 
+        FILE * tmp;
+        FILE * rtmp;
+        char * temp_file_name;
 
-       MyPipe(){}
-
-       void popen(){
-           if (pipe(this->fd) < 0){
-              printf("Could not create pipe");
-              exit(EXIT_FAILURE);
-           }
-       }
+        MyPipe(){
+            this->temp_file_name = "temp.txt";
+        }
 
        size_t fwrite(char mass[], size_t size){
-            size_t writed_size = write(this->fd[1], mass, size);
-            return writed_size;
+            char normalized_mass[1024];
+            strcpy(normalized_mass, mass);
+            strcat( normalized_mass, "\n" );
+
+            if(tmp == NULL){
+                tmp = fopen(this->temp_file_name , "w+");
+            }
+
+            return fputs(normalized_mass, tmp);
        }
 
        size_t fread(char mass[], size_t size){
-           // read and close read descriptor
-          size_t read_size = read(this->fd[0], mass, size);
-          return read_size;
+           // read from read descriptor
+            if(rtmp == NULL){
+                rtmp = fopen(this->temp_file_name, "r");
+            }
+
+           return fscanf(rtmp, "%s", mass);
        }
 
        void frclose(){
-           close(fd[0]);
+            fclose(rtmp);
        }
 
        void fwclose(){
-          close(fd[1]);
+           fclose(tmp);
+       }
+
+
+       void pclose(){
+            remove(temp_file_name);
        }
 
 };
@@ -87,15 +104,17 @@ void write_file(FILE *ofptr, char * file_name, char * buff){
    fclose(ofptr);
 }
 
-
+void signal_received_from_parent(int sig){
+     printf("child [%d] received signal %d\n", getpid(), sig);
+}
 int main()
 {
 
     int pid;
     size_t s1, s2;
-    char filename[1024];
-    char fileout[1024];
-    char mass[1024];
+    char filename[str_size];
+    char fileout[str_size];
+    char mass[str_size];
     FILE *fptr;
     FILE *ofptr;
     int direction = 0, data_input_dest = 0, data_output_dest = 0;
@@ -119,8 +138,6 @@ int main()
     s2 = sizeof(mass);
     char re_mass[s2];
 
-
-
     safe_ask_user(&data_output_dest, "Choose output to [1 - file | 2 - console]: ");
     if (data_output_dest == 1){
         printf("Enter output file name: ");
@@ -130,13 +147,13 @@ int main()
 
 
     MyPipe pipeline = MyPipe();
-    pipeline.popen();
 
     if ((pid = fork()) > 0){
         if(direction == 1){
             // parrent process
             s1 = pipeline.fwrite(mass, s2);
             pipeline.fwclose();
+            wait(NULL); // wait for child's response
         }else{
             s1 = pipeline.fread(re_mass, s2);
             pipeline.frclose();
@@ -150,16 +167,7 @@ int main()
            }
 
         }
-
-        if ( s1 != s2 ){
-            printf("Failed to perform action on pipeline\n");
-            exit(EXIT_FAILURE);
-        }
-
-        wait(NULL);
-
     }else{
-        // child process
         if(direction == 1){
             s1 = pipeline.fread(re_mass, s2);
             pipeline.frclose();
@@ -176,13 +184,15 @@ int main()
         else{
             s1 = pipeline.fwrite(mass, s2);
             pipeline.fwclose();
-        }
-        if (s1 != s2){
-            printf("Failed to perform action on pipeline\n");
-            exit(EXIT_FAILURE);
+            // wait for parent
+            sleep(1);
         }
 
+        exit(0);
+
      }
+
+    pipeline.pclose();
 
     return 0;
 }
