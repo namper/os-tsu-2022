@@ -5,13 +5,18 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <string.h>
+
+
+#define str_size 1024
 
 
 class MyPipe{
-
+ // my pipe implementation
 
     public: 
         FILE * tmp;
+        FILE * rtmp;
         char * temp_file_name;
 
         MyPipe(){
@@ -19,24 +24,28 @@ class MyPipe{
         }
 
        size_t fwrite(char mass[], size_t size){
+            char normalized_mass[1024];
+            strcpy(normalized_mass, mass);
+            strcat( normalized_mass, "\n" );
+
             if(tmp == NULL){
-                tmp = fopen("temp.txt", "w+");
+                tmp = fopen(this->temp_file_name , "w+");
             }
 
-            return fputs(mass, tmp);
+            return fputs(normalized_mass, tmp);
        }
 
        size_t fread(char mass[], size_t size){
            // read from read descriptor
-            if(tmp == NULL){
-                tmp = fopen("temp.txt", "r");
+            if(rtmp == NULL){
+                rtmp = fopen(this->temp_file_name, "r");
             }
 
-           return fscanf(tmp, "%s", mass);
+           return fscanf(rtmp, "%s", mass);
        }
 
        void frclose(){
-            fclose(tmp);
+            fclose(rtmp);
        }
 
        void fwclose(){
@@ -95,15 +104,17 @@ void write_file(FILE *ofptr, char * file_name, char * buff){
    fclose(ofptr);
 }
 
-
+void signal_received_from_parent(int sig){
+     printf("child [%d] received signal %d\n", getpid(), sig);
+}
 int main()
 {
 
     int pid;
     size_t s1, s2;
-    char filename[1024];
-    char fileout[1024];
-    char mass[1024];
+    char filename[str_size];
+    char fileout[str_size];
+    char mass[str_size];
     FILE *fptr;
     FILE *ofptr;
     int direction = 0, data_input_dest = 0, data_output_dest = 0;
@@ -142,6 +153,7 @@ int main()
             // parrent process
             s1 = pipeline.fwrite(mass, s2);
             pipeline.fwclose();
+            wait(NULL); // wait for child's response
         }else{
             s1 = pipeline.fread(re_mass, s2);
             pipeline.frclose();
@@ -155,13 +167,7 @@ int main()
            }
 
         }
-
-        wait(NULL);
-
     }else{
-        // child process
-        // @TODO: fix problem with reverse direction
-        // sigkill
         if(direction == 1){
             s1 = pipeline.fread(re_mass, s2);
             pipeline.frclose();
@@ -178,7 +184,11 @@ int main()
         else{
             s1 = pipeline.fwrite(mass, s2);
             pipeline.fwclose();
+            // wait for parent
+            sleep(1);
         }
+
+        exit(0);
 
      }
 
